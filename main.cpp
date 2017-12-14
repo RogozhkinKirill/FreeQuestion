@@ -14,7 +14,10 @@ void DrawCircle(int x , int y , int radius , COLORREF colorIn , COLORREF colorOu
 
 int main ()
 {
-    HWND main = txCreateWindow(1300 , 700);
+    size_t sizeWinX = 1300;
+    size_t sizeWinY = 700;
+
+    HWND main = txCreateWindow(sizeWinX , sizeWinY);
 
     //Собственные время и частоты системы
     int    periodTime = 150;
@@ -37,16 +40,17 @@ int main ()
     double phase       = 0;
     double lastPhase   = 0;
 
+
     //Текущие значения
     int dotAmpl   = 0;
     int breakdown = 20;
 
-    txLine(200 , 0   , 200  , 140); //Положение равновесия (ТЕЛА)
-    txLine(0   , 600 , 1300 , 600); //Положение равновесия (ТЕЛА)
-    txLine(0   , 300 , 1300 , 300); //Отклонение скорости
-    txLine(0   , 400 , 1300 , 400);
+    txLine(200 , 0              , 200      , 140); //Положение равновесия (ТЕЛА)
+    txLine(0   , sizeWinY - 100 , sizeWinX , sizeWinY - 100); //Положение равновесия (ТЕЛА)
+    txLine(0   , sizeWinY - 400 , sizeWinX , sizeWinY - 400); //Отклонение скорости
+    txLine(0   , sizeWinY - 300 , sizeWinX , sizeWinY - 300);
 
-    txLine(0   , 500 , 1300 , 500);
+    txLine(0   , sizeWinY - 200 , sizeWinX , sizeWinY - 200);
 
 
     txBegin();
@@ -71,7 +75,7 @@ int main ()
 
 
         //Рисуем (1) Отклонение от положения равновесия, (2) скорости от времени
-        if (dotAmpl < 1300 * breakdown)
+        if (dotAmpl < sizeWinX * breakdown)
         {
             //(1)
             if (amplitude * sin (time               * frequency - phase) <  100 &&
@@ -81,8 +85,8 @@ int main ()
                 dotAmpl % breakdown == 0)
             {
                 txSetColor(TX_GREEN);
-                txLine ( dotAmpl/breakdown - 1 , 600 + (int)(amplitude * sin ((time - breakdown) * frequency - phase)) ,
-                         dotAmpl/breakdown     , 600 + (int)(amplitude * sin ( time              * frequency - phase)));
+                txLine ( dotAmpl/breakdown - 1 , sizeWinY - 100 + (int)(amplitude * sin ((time - breakdown) * frequency - phase)) ,
+                         dotAmpl/breakdown     , sizeWinY - 100 + (int)(amplitude * sin ( time              * frequency - phase)));
             }
 
             //(2)
@@ -93,10 +97,10 @@ int main ()
                 dotAmpl % breakdown == 0)
             {
                 txSetColor(TX_GREEN);
-                txLine ( dotAmpl/breakdown - 1 , 400 + (int)(curVelocity *
-                                                             cos ((time - breakdown) * frequency - phase)) ,
-                         dotAmpl/breakdown     , 400 + (int)(curVelocity *
-                                                             cos ( time              * frequency - phase)));
+                txLine ( dotAmpl/breakdown - 1 , sizeWinY - 300 + (int)(curVelocity *
+                                                                        cos ((time - breakdown) * frequency - phase)) ,
+                         dotAmpl/breakdown     , sizeWinY - 300 + (int)(curVelocity *
+                                                                        cos ( time              * frequency - phase)));
             }
 
 
@@ -106,13 +110,13 @@ int main ()
         {
             txSetColour(TX_BLACK);
             txSetFillColour(TX_BLACK);
-            txRectangle(0 , 250 , 1300 , 750);
+            txRectangle(0 , sizeWinY - 550 , sizeWinX , sizeWinY - 50);
 
             txSetColour(TX_WHITE);
-            txLine(0 , 600 , 1300 , 600);
-            txLine(0 , 300 , 1300 , 300);
-            txLine(0 , 400 , 1300 , 400);
-            txLine(0 , 500 , 1300 , 500);
+            txLine(0   , sizeWinY - 100 , sizeWinX , sizeWinY - 100); //Положение равновесия (ТЕЛА)
+            txLine(0   , sizeWinY - 400 , sizeWinX , sizeWinY - 400); //Отклонение скорости
+            txLine(0   , sizeWinY - 300 , sizeWinX , sizeWinY - 300);
+            txLine(0   , sizeWinY - 200 , sizeWinX , sizeWinY - 200);
 
             dotAmpl = 0;
         }
@@ -137,7 +141,7 @@ int main ()
 
 
         //Математика
-        if (time == (int)(10000 * periodTime))
+        if (time == (10000 * periodTime))
             time = 0;
 
 
@@ -145,7 +149,6 @@ int main ()
         if (time % (int)pushPeriod == 0 || GetAsyncKeyState (VK_RIGHT))
         {
             curPeriod++;
-
 
             lastPhase = phase;
             if (amplitude     * cos(phase)    +
@@ -196,6 +199,7 @@ int main ()
             curVelocity += curVelocity * cos (time * frequency - lastPhase) + pushVelocity;
 
 
+            //Амплитуда только для периодических толчков (переделать под общий случай)
             lastAmplitude = amplitude;
             amplitude     = sqrt (lastAmplitude * lastAmplitude +
                                   pushAmplUp    * pushAmplUp    +
