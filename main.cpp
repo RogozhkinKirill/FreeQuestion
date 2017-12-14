@@ -164,7 +164,6 @@ int main ()
                 phase = 0;
 
 
-            //Амплитуда только для периодических толчков (переделать под общий случай)
             lastAmplitude = amplitude;
             amplitude     = sqrt (lastAmplitude * lastAmplitude +
                                   pushAmplitude * pushAmplitude +
@@ -199,7 +198,6 @@ int main ()
             curVelocity += curVelocity * cos (time * frequency - lastPhase) + pushVelocity;
 
 
-            //Амплитуда только для периодических толчков (переделать под общий случай)
             lastAmplitude = amplitude;
             amplitude     = sqrt (lastAmplitude * lastAmplitude +
                                   pushAmplUp    * pushAmplUp    +
