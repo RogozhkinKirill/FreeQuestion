@@ -1,4 +1,5 @@
 #include "TXLib.h"
+#include "DirectTX.cpp"
 
 
 #include <stdio.h>
@@ -14,16 +15,31 @@ size_t COS = 2;
 
 //------------------------------------------------------------
 
-void DrawCircle (int x , int y , int radius , COLORREF colorIn , COLORREF colorOut);
+void DrawCircle     (int x , int y , int radius , COLORREF colorIn , COLORREF colorOut);
 
-void DrawPush (int time , double amplitude , int line);
+void DrawPush       (int time , double amplitude , int line);
 
 void DrawSinusoidal (int xCord     , int time   , double phase     , double frequency ,
                      int amplitude , int line  , int     breakdown , size_t law);
 
-void ReBuildScreen (int sizeWinX , int sizeWinY , int velLine , int pushLine , int* dotAmpl);
 
-void PrintInfo (double velocity , double amplitude , double phase , size_t sizeWinX , size_t sizeWinY);
+
+void ReBuildScreen  (int sizeWinX , int sizeWinY , int velLine , int pushLine , int* dotAmpl);
+
+
+
+void PrintInfo      (double velocity , double amplitude , double phase , size_t sizeWinX , size_t sizeWinY);
+
+void ScanInfo (int* periodTime , double* pushPeriod , double* pushVelocity ,
+               int* breakdown  , double* phase      , double* ampl);
+
+
+
+void CalcPhase      (int     time      , double  amplitude , double pushAmplitude ,
+                     double* lastPhase , double* phase     , double frequency);
+
+void CalcAmplitude  (int time             , double* amplitude , double* lastAmplitude ,
+                     double pushAmplitude , double phase      , double frequency);
 
 //------------------------------------------------------------
 
@@ -33,7 +49,6 @@ int main ()
     int    periodTime = 0;
     double frequency  = 0;
 
-
     //Времы между толчками
     double pushPeriod = 0;
 
@@ -42,32 +57,9 @@ int main ()
     double curVelocity = 0;
     double pushVelUp   = 0;
 
-
     //Текущие значения
     int dotAmpl   = 0;
     int breakdown = 0;
-
-    printf ("Print own oscillation period\n");
-    scanf  ("%d" , &periodTime);
-
-    printf ("Print time between shocks\n");
-    scanf  ("%lf" , &pushPeriod);
-
-    printf ("Print amplitude of shock\n");
-    scanf  ("%lf" , &pushVelocity);
-
-    printf ("Print breakdown\n");
-    scanf  ("%d" , &breakdown);
-
-    printf ("%d %f %f %d\n" , periodTime , pushPeriod , pushVelocity , breakdown);
-
-
-
-    scanf ("%lf" , &frequency);
-    size_t sizeWinX = 1350;
-    size_t sizeWinY = 700;
-
-    HWND main = txCreateWindow(sizeWinX , sizeWinY);
 
     //Амплитуды
     double amplitude     = 0;
@@ -79,6 +71,15 @@ int main ()
     double phase       = 0;
     double lastPhase   = 0;
 
+
+
+    ScanInfo (&periodTime , &pushPeriod , &pushVelocity , &breakdown , &phase , &amplitude);
+
+    size_t sizeWinX = 1350;
+    size_t sizeWinY = 700;
+
+    //Создаем окно для рисования
+    DirectTXCreateWindow(sizeWinX , sizeWinY , "FreeQuestion... [Esc] to exit");
 
 
     if (!periodTime == 0 || !pushAmplitude == 0)
@@ -98,24 +99,17 @@ int main ()
 
     //Скорость
     int velLine  = sizeWinY - 320;
-    txTextOut(0   , velLine - 110 , "Velocity");
-    txLine   (0   , velLine - 100 , sizeWinX , velLine - 100);
-    txLine	 (0   , velLine       , sizeWinX , velLine); //Отклонение скорости
-    txLine   (0   , velLine + 100 , sizeWinX , velLine + 100);
-
-    //Отклонение
-    txTextOut(0   , sizeWinY - 210 , "Deviation");
-    txLine   (200 , 0              , 200      , 140); //Положение равновесия (ТЕЛА)
-    txLine   (0   , sizeWinY - 100 , sizeWinX , sizeWinY - 100); //Положение равновесия (ТЕЛА)
-    txLine   (0   , sizeWinY - 200 , sizeWinX , sizeWinY - 200);
 
     //Толчки
     int pushLine = sizeWinY - 490;
-    txTextOut(0 , pushLine - 60 , "Pushes");
-    txLine   (0 , pushLine - 50 , sizeWinX , pushLine - 50);
-    txLine   (0 , pushLine + 50 , sizeWinX , pushLine + 50);
-    txLine   (0 , pushLine       , sizeWinX , pushLine);
-    txLine   (0 , pushLine - 70 , sizeWinX , pushLine - 70);
+
+    ReBuildScreen (sizeWinX , sizeWinY , velLine , pushLine , &dotAmpl);
+
+
+    txTextOut (sizeWinX - 200 , 10 , "Velocity");
+    txTextOut (sizeWinX - 200 , 30 , "Amplitude");
+    txTextOut (sizeWinX - 200 , 50 , "Phase");
+
 
 
     txBegin();
@@ -126,9 +120,9 @@ int main ()
     {
         //Рисование
 
+
         txSleep (0);
         DrawCircle (200 + (int)(amplitude * sin ((time - 1) * frequency - phase)) ,
-
                     70 , 30 , TX_BLACK , TX_BLACK);
 
         //Рисуем положение равновесия
@@ -167,24 +161,31 @@ int main ()
             }
 
             //(3) вправо
-            if(((time % (int)pushPeriod == 0 && pushVelocity * 40 < 50) || GetAsyncKeyState (VK_RIGHT)) &&
-               !GetAsyncKeyState (VK_LEFT))
+            if ((GetAsyncKeyState (VK_RIGHT) || time % (int)pushPeriod == 0) &&
+                !GetAsyncKeyState (VK_LEFT ))
             {
-                DrawPush (dotAmpl / breakdown , -pushVelocity , pushLine);
-            }
-            else	if(time % (int)pushPeriod == 0 && pushVelocity * 40 >= 50)
-            {
-                DrawPush (dotAmpl / breakdown , -49.0 , pushLine);
+                if (pushVelocity * 40 < 50)
+                {
+                    DrawPush (dotAmpl / breakdown , -pushVelocity * 40 , pushLine);
+                }
+                else
+                {
+                    DrawPush (dotAmpl / breakdown , -49.0 , pushLine);
+                }
+
             }
 
             //(3) влево
-            if(pushVelocity * 40 < 50 && GetAsyncKeyState (VK_LEFT))
+            if (GetAsyncKeyState (VK_LEFT))
             {
-                DrawPush (dotAmpl / breakdown , -pushVelUp , pushLine);
-            }
-            else	if(time % (int)pushPeriod == 0 && pushVelocity * 40 >= 50)
-            {
-                DrawPush (dotAmpl / breakdown , 49.0 , pushLine);
+                if (pushVelocity * 40 < 50)
+                {
+                    DrawPush (dotAmpl / breakdown , -pushVelUp * 40 , pushLine);
+                }
+                else
+                {
+                    DrawPush (dotAmpl / breakdown , 49.0 , pushLine);
+                }
             }
 
 
@@ -219,6 +220,7 @@ int main ()
 
 
         //Математика
+
         if (time == (10000 * periodTime))
             time = 0;
 
@@ -228,25 +230,10 @@ int main ()
         {
             curPeriod++;
 
-            lastPhase = phase;
-            if (amplitude     * cos(phase)    +
-                pushAmplitude * sin(frequency * time) != 0)
-            {
-                phase     = atan2 ((amplitude     * sin(phase) +
-                                    pushAmplitude * sin(frequency * time))
-                        ,
-                                   (amplitude     * cos(phase) +
-                                    pushAmplitude * cos(frequency * time)));
-            }
-            else
-                phase = 0;
+            CalcPhase (time      , amplitude , pushAmplitude ,
+                       &lastPhase , &phase    , frequency);
 
-
-            lastAmplitude = amplitude;
-            amplitude     = sqrt (lastAmplitude * lastAmplitude +
-                                  pushAmplitude * pushAmplitude +
-                                  2 * pushAmplitude * lastAmplitude * cos(frequency * time - lastPhase));
-
+            CalcAmplitude (time , &amplitude , &lastAmplitude , pushAmplitude , lastPhase , frequency);
 
             curVelocity  = amplitude;
 
@@ -258,26 +245,11 @@ int main ()
         {
             curPeriod++;
 
-            lastPhase = phase;
-            if (amplitude  * cos(phase)    +
-                pushAmplUp * sin(frequency * time) != 0)
-            {
-                phase     = atan2 ((amplitude  * sin(phase) +
-                                    pushAmplUp * sin(frequency * time))
-                        ,
-                                   (amplitude  * cos(phase) +
-                                    pushAmplUp * cos(frequency * time)));
-            }
-            else
-                phase = 0;
+            CalcPhase (time      , amplitude , pushAmplUp ,
+                       &lastPhase , &phase    , frequency);
 
-
-
-            lastAmplitude = amplitude;
-            amplitude     = sqrt (lastAmplitude * lastAmplitude +
-                                  pushAmplUp    * pushAmplUp    +
-                                  2 * pushAmplUp    * lastAmplitude * cos(frequency * time - lastPhase));
-
+            CalcAmplitude (time       , &amplitude , &lastAmplitude ,
+                           pushAmplUp , lastPhase  , frequency);
 
             curVelocity  = amplitude;
         }
@@ -300,9 +272,9 @@ int main ()
 
 void DrawCircle(int x , int y , int radius , COLORREF colorIn , COLORREF colorOut)
 {
+    txSetColor     (colorOut);
+    txSetFillColor (colorIn);
 
-    txSetColor(colorOut);
-    txSetFillColor(colorIn);
     txCircle (x , y , radius);
 
     return;
@@ -318,7 +290,7 @@ void DrawPush (int time , double amplitude , int line)
     txSetColour     (TX_GREEN);
     txSetFillColour (TX_GREEN);
     txRectangle (time - 1 , line ,
-                 time     , line - amplitude * 60);
+                 time     , line - amplitude);
 }
 
 //------------------------------------------------------------
@@ -331,18 +303,18 @@ void DrawSinusoidal (int xCord     , int time      , double phase , double frequ
 
     if (law == COS)
     {
-        txLine(xCord - 1 , line + (int) (amplitude *
-                                         cos((time - breakdown) * frequency - phase)) ,
-               xCord     , line + (int) (amplitude *
-                                         cos( time              * frequency - phase)));
+        txLine (xCord - 1 , line + (int) (amplitude *
+                                          cos((time - breakdown) * frequency - phase)) ,
+                xCord     , line + (int) (amplitude *
+                                          cos( time              * frequency - phase)));
     }
 
     if (law == SIN)
     {
-        txLine(xCord - 1 , line + (int) (amplitude *
-                                         sin((time - breakdown) * frequency - phase)) ,
-               xCord     , line + (int) (amplitude *
-                                         sin( time              * frequency - phase)));
+        txLine (xCord - 1 , line + (int) (amplitude *
+                                          sin((time - breakdown) * frequency - phase)) ,
+                xCord     , line + (int) (amplitude *
+                                          sin( time              * frequency - phase)));
     }
 }
 
@@ -350,9 +322,9 @@ void DrawSinusoidal (int xCord     , int time      , double phase , double frequ
 
 void ReBuildScreen (int sizeWinX , int sizeWinY , int velLine , int pushLine , int* dotAmpl)
 {
-    txSetColour    (TX_BLACK);
-    txSetFillColour(TX_BLACK);
-    txRectangle    (0 , pushLine - 150 , sizeWinX , sizeWinY);
+    txSetColour     (TX_BLACK);
+    txSetFillColour (TX_BLACK);
+    txRectangle     (0 , pushLine - 150 , sizeWinX , sizeWinY);
 
     txSetColour(TX_WHITE);
 
@@ -391,14 +363,97 @@ void PrintInfo (double velocity , double amplitude , double phase , size_t sizeW
 
     sprintf (velStr , "%.5f" , velocity);
     sprintf (ampStr , "%.5f" , amplitude);
-    sprintf (phsStr , "%.5f" , phase);
+    sprintf (phsStr , "%.5f" , phase / (2 * PI) * 360);
 
     txSetColor     (TX_BLACK);
     txSetFillColor (TX_BLACK);
-    txRectangle    (sizeWinX - 150 , 0 , sizeWinX , 60);
+    txRectangle    (sizeWinX - 130 , 0 , sizeWinX , 60);
 
     txSetColor (TX_WHITE);
-    txTextOut  (sizeWinX - 100 , 10  , velStr);
+    txTextOut  (sizeWinX - 100 , 10 , velStr);
     txTextOut  (sizeWinX - 100 , 30 , ampStr);
     txTextOut  (sizeWinX - 100 , 50 , phsStr);
+}
+
+//------------------------------------------------------------
+//Считаем фазу
+
+void CalcPhase (int     time      , double  amplitude , double pushAmplitude ,
+                double* lastPhase , double* phase     , double frequency)
+{
+    *lastPhase = *phase;
+    *phase     = atan2 (amplitude     * sin(*phase) +
+                        pushAmplitude * sin(frequency * time)
+            ,
+                        amplitude     * cos(*phase) +
+                        pushAmplitude * cos(frequency * time));
+
+}
+
+//------------------------------------------------------------
+//Считаем амплитуду
+
+void CalcAmplitude  (int time             , double* amplitude , double* lastAmplitude ,
+                     double pushAmplitude , double phase      , double frequency)
+{
+    *lastAmplitude = *amplitude;
+    *amplitude     = sqrt (*lastAmplitude *  (*lastAmplitude) +
+                           pushAmplitude *    pushAmplitude  +
+                           2 * pushAmplitude *  (*lastAmplitude) * cos(frequency * time - phase));
+}
+
+//------------------------------------------------------------
+
+void ScanInfo (int* periodTime , double* pushPeriod , double* pushVelocity ,
+               int* breakdown  , double* phase      , double* ampl)
+{
+    int i = 0;
+
+    while (i == 0)
+    {
+        printf ("Print own oscillation period\n");
+        scanf  ("%d" , periodTime);
+
+        printf ("Print time between shocks\n");
+        scanf  ("%lf" , pushPeriod);
+
+        printf ("Print amplitude of shock\n");
+        scanf  ("%lf" , pushVelocity);
+
+        printf ("Print breakdown\n");
+        scanf  ("%d" , breakdown);
+
+        printf ("Print 1 if you want change\nPrint 0 if you want save current (%f)\n" , *phase);
+
+        int ans = 0;
+        scanf ("%d" , &ans);
+
+        if (ans)
+        {
+            int grad = 0;
+            printf ("In degrees(1) or in radians(0)\n");
+            scanf  ("%d" , &grad);
+            printf ("Print phase\n");
+
+            if (!grad)
+            {
+                scanf  ("%lf" , phase);
+            }
+            else
+            {
+                double res = 0.0;
+                scanf ("%lf" , &res);
+
+                *phase = res / 180 * PI;
+            }
+        }
+
+        printf ("Print positive amplitude\n");
+        scanf  ("%lf" , ampl);
+
+        printf ("%d %f %f %d %f %f\n" , *periodTime , *pushPeriod , *pushVelocity , *breakdown , *phase , *ampl);
+
+        printf ("\nInformation scanned correct, did not it?(yes - 1, no - 0)\n");
+        scanf  ("%d" , &i);
+    }
 }
