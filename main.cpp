@@ -24,14 +24,22 @@ void DrawSinusoidal (int xCord     , int time   , double phase     , double freq
 
 
 
-void ReBuildScreen  (int sizeWinX , int sizeWinY , int velLine , int pushLine , int* dotAmpl);
+void ReBuildScreen  (int sizeWinX , int sizeWinY  , int velLine ,
+                     int pushLine , int objCentrX , int objCentrY , int* dotAmpl);
 
 
 
-void PrintInfo      (double velocity , double amplitude , double phase , size_t sizeWinX , size_t sizeWinY);
+void PrintInfo      (double velocity , double amplitude  , double phase ,
+                     double frequency , double periodTime , double pushPeriod ,
+                     size_t sizeWinX  , size_t sizeWinY);
 
-void ScanInfo (int* periodTime , double* pushPeriod , double* pushVelocity ,
-               int* breakdown  , double* phase      , double* ampl);
+void DrawMainInfo   (int sizeWinX , int sizeWinY , COLORREF background , COLORREF symbol);
+void DrawPlus       (int cordX    , int cordY    , COLORREF background , COLORREF symbol);
+void DrawMinus      (int cordX    , int cordY    , COLORREF background , COLORREF symbol);
+
+
+void ScanInfo       (int* periodTime , double* pushPeriod , double* pushVelocity ,
+                     int* breakdown  , double* phase      , double* ampl);
 
 
 
@@ -40,6 +48,10 @@ void CalcPhase      (int     time      , double  amplitude , double pushAmplitud
 
 void CalcAmplitude  (int time             , double* amplitude , double* lastAmplitude ,
                      double pushAmplitude , double phase      , double frequency);
+
+
+void ChangingParam (size_t sizeWinX  , size_t  sizeWinY   , double* phase ,
+                    double* pushPeriod , int*    periodTime);
 
 //------------------------------------------------------------
 
@@ -71,18 +83,24 @@ int main ()
     double phase       = 0;
     double lastPhase   = 0;
 
+    //Размеры окно
+    size_t sizeWinX = 1350;
+    size_t sizeWinY = 700;
+
+
+    //Положение равновесия шара
+    int objCentrX = sizeWinX / 4;
+    int objCentrY = 70;
 
 
     ScanInfo (&periodTime , &pushPeriod , &pushVelocity , &breakdown , &phase , &amplitude);
 
-    size_t sizeWinX = 1350;
-    size_t sizeWinY = 700;
 
     //Создаем окно для рисования
     DirectTXCreateWindow(sizeWinX , sizeWinY , "FreeQuestion... [Esc] to exit");
 
 
-    if (!periodTime == 0 || !pushAmplitude == 0)
+    if (periodTime != 0 || pushAmplitude != 0 || frequency != 0)
     {
         frequency     = 2 * PI / periodTime;
         pushAmplitude = pushVelocity / frequency;
@@ -103,35 +121,55 @@ int main ()
     //Толчки
     int pushLine = sizeWinY - 490;
 
-    ReBuildScreen (sizeWinX , sizeWinY , velLine , pushLine , &dotAmpl);
 
+    //Рисуем основу
+    ReBuildScreen (sizeWinX , sizeWinY  , velLine ,
+                   pushLine , objCentrX , objCentrY , &dotAmpl);
 
-    txTextOut (sizeWinX - 200 , 10 , "Velocity");
-    txTextOut (sizeWinX - 200 , 30 , "Amplitude");
-    txTextOut (sizeWinX - 200 , 50 , "Phase");
+    DrawMainInfo (sizeWinX , sizeWinY , TX_WHITE , TX_BLACK);
 
-
+    //область изменений
+    RECT areaChanging = { sizeWinX / 2 , 0 , sizeWinX - 220 , 140};
 
     txBegin();
 
     int curPeriod = 0;
     int time = 0;
+
+    //Рисование
     for (; !GetAsyncKeyState (VK_ESCAPE); ++time)
     {
-        //Рисование
-
 
         txSleep (0);
-        DrawCircle (200 + (int)(amplitude * sin ((time - 1) * frequency - phase)) ,
-                    70 , 30 , TX_BLACK , TX_BLACK);
+
+        //Области изменения Значений
+        while (txMouseButtons() == 1 && In (txMousePos(), areaChanging))
+        {
+            double lastFre = frequency;
+            txSleep (100);
+            ChangingParam (sizeWinX , sizeWinY , &phase , &pushPeriod , &periodTime);
+
+            frequency     = 2 * PI / periodTime;
+
+            DrawCircle (objCentrX + (int)(lastAmplitude * sin ((time - 1) * lastFre - lastPhase)) ,
+                        objCentrY , 30 , TX_BLACK , TX_BLACK);
+
+        }
+
+
+        if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
+            DrawCircle (objCentrX + (int)(amplitude * sin ((time - 1) * frequency - phase)) ,
+                        objCentrY , 30 , TX_BLACK , TX_BLACK);
+
 
         //Рисуем положение равновесия
         txSetColor (TX_WHITE);
-        txLine (200 , 0 , 200 , 140);
+        txLine (objCentrX , 0 , objCentrX , 140);
 
 
-        DrawCircle (200 + (int)(amplitude * sin (time * frequency - phase)) ,
-                    70 , 30 , TX_CYAN , TX_BLACK);
+        if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
+            DrawCircle (objCentrX + (int)(amplitude * sin (time * frequency - phase)) ,
+                        objCentrY , 30 , TX_CYAN , TX_BLACK);
 
 
 
@@ -139,10 +177,8 @@ int main ()
         if (dotAmpl < sizeWinX * breakdown)
         {
             //(1)
-            if (amplitude * sin (time               * frequency - phase) <  100 &&
-                amplitude * sin (time               * frequency - phase) > -100 &&
-                amplitude * sin ((time - breakdown) * frequency - phase) <  100 &&
-                amplitude * sin ((time - breakdown) * frequency - phase) > -100 &&
+            if (abs (amplitude * sin (time               * frequency - phase)) <  100 &&
+                abs (amplitude * sin ((time - breakdown) * frequency - phase)) <  100 &&
                 dotAmpl % breakdown == 0)
             {
                 DrawSinusoidal (dotAmpl / breakdown , time            , phase     , frequency ,
@@ -150,10 +186,8 @@ int main ()
             }
 
             //(2)
-            if (curVelocity * cos ( time              * frequency - phase) <  100 &&
-                curVelocity * cos ( time              * frequency - phase) > -100 &&
-                curVelocity * cos ((time - breakdown) * frequency - phase) <  100 &&
-                curVelocity * cos ((time - breakdown) * frequency - phase) > -100 &&
+            if (abs (curVelocity * cos ( time              * frequency - phase)) <  100 &&
+                abs (curVelocity * cos ((time - breakdown) * frequency - phase)) <  100 &&
                 dotAmpl % breakdown == 0)
             {
                 DrawSinusoidal (dotAmpl / breakdown , time     , phase     , frequency ,
@@ -193,19 +227,23 @@ int main ()
         }
         else
         {
-            ReBuildScreen (sizeWinX , sizeWinY , velLine , pushLine , &dotAmpl);
+            ReBuildScreen (sizeWinX , sizeWinY  , velLine ,
+                           pushLine , objCentrX , objCentrY , &dotAmpl);
         }
 
 
         //Пишем информацию
-        PrintInfo (curVelocity / frequency , amplitude , phase , sizeWinX , sizeWinY);
+        PrintInfo (curVelocity / frequency , amplitude  , phase ,
+                   frequency               , periodTime , pushPeriod ,
+                   sizeWinX                , sizeWinY);
 
 
         //Остановка движения
         if (GetAsyncKeyState (VK_SPACE))
         {
-            DrawCircle (200 + (int)(amplitude * sin (time * frequency - phase)) ,
-                        70 , 30 , TX_BLACK , TX_BLACK);
+            if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
+                DrawCircle (objCentrX + (int)(amplitude * sin (time * frequency - phase)) ,
+                            objCentrY , 30 , TX_BLACK , TX_BLACK);
 
             curVelocity = 0;
 
@@ -213,6 +251,7 @@ int main ()
 
             amplitude = 0;
         }
+
 
 
         while (GetAsyncKeyState ('S'))
@@ -226,7 +265,8 @@ int main ()
 
 
         //Математика: удар вправо
-        if ((time % (int)pushPeriod == 0 || GetAsyncKeyState (VK_RIGHT)) && !GetAsyncKeyState (VK_LEFT))
+        if ((time % (int)pushPeriod == 0 || GetAsyncKeyState (VK_RIGHT)) &&
+            !GetAsyncKeyState (VK_LEFT)   && pushAmplitude != 0)
         {
             curPeriod++;
 
@@ -241,7 +281,7 @@ int main ()
 
 
         //Математика: удар влево
-        if (GetAsyncKeyState (VK_LEFT))
+        if (GetAsyncKeyState (VK_LEFT) && pushAmplUp != 0)
         {
             curPeriod++;
 
@@ -257,10 +297,13 @@ int main ()
     }
 
 
+    if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
+        DrawCircle (objCentrX + (int)(amplitude * sin ((time - 1) * frequency - phase)) ,
+                    objCentrY , 30 , TX_BLACK , TX_BLACK);
+    if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
+        DrawCircle (objCentrX + (int)(amplitude * sin (time       * frequency - phase)) ,
+                    objCentrY , 30 , TX_CYAN , TX_BLACK);
 
-
-    DrawCircle (200 + (int)(amplitude * sin (time * frequency - phase)) ,
-                70 , 30 , TX_CYAN , TX_BLACK);
 
     txEnd();
 
@@ -297,7 +340,7 @@ void DrawPush (int time , double amplitude , int line)
 // Рисеум синусоиду
 
 void DrawSinusoidal (int xCord     , int time      , double phase , double frequency ,
-                     int amplitude , int    line  , int breakdown    , size_t law)
+                     int amplitude , int    line   , int breakdown , size_t law)
 {
     txSetColor(TX_GREEN);
 
@@ -320,11 +363,12 @@ void DrawSinusoidal (int xCord     , int time      , double phase , double frequ
 
 //------------------------------------------------------------
 
-void ReBuildScreen (int sizeWinX , int sizeWinY , int velLine , int pushLine , int* dotAmpl)
+void ReBuildScreen (int sizeWinX , int sizeWinY  , int velLine ,
+                    int pushLine , int objCentrX , int objCentrY , int* dotAmpl)
 {
     txSetColour     (TX_BLACK);
     txSetFillColour (TX_BLACK);
-    txRectangle     (0 , pushLine - 150 , sizeWinX , sizeWinY);
+    txRectangle     (0 , 160 , sizeWinX , sizeWinY);
 
     txSetColour(TX_WHITE);
 
@@ -335,10 +379,10 @@ void ReBuildScreen (int sizeWinX , int sizeWinY , int velLine , int pushLine , i
     txLine   (0   , velLine + 100 , sizeWinX , velLine + 100);
 
     //Отклонение
-    txTextOut(0   , sizeWinY - 210 , "Deviation");
-    txLine   (200 , 0              , 200      , 140); //Положение равновесия (ТЕЛА)
-    txLine   (0   , sizeWinY - 100 , sizeWinX , sizeWinY - 100); //Положение равновесия (ТЕЛА)
-    txLine   (0   , sizeWinY - 200 , sizeWinX , sizeWinY - 200);
+    txTextOut(0         , sizeWinY - 210 , "Deviation");
+    txLine   (objCentrX , objCentrY - 70 , objCentrX , objCentrY + 70); //Положение равновесия (ТЕЛА)
+    txLine   (0         , sizeWinY - 100 , sizeWinX  , sizeWinY - 100); //Положение равновесия (ТЕЛА)
+    txLine   (0         , sizeWinY - 200 , sizeWinX  , sizeWinY - 200);
 
 
     //Толчки
@@ -349,30 +393,92 @@ void ReBuildScreen (int sizeWinX , int sizeWinY , int velLine , int pushLine , i
     txLine   (0 , pushLine - 70 , sizeWinX , pushLine - 70);
 
 
+    txLine   (sizeWinX / 2 , objCentrY - 70 , sizeWinX / 2 , objCentrY + 70);
+
     *dotAmpl = 0;
 }
 
 //------------------------------------------------------------
 
-void PrintInfo (double velocity , double amplitude , double phase , size_t sizeWinX , size_t sizeWinY)
+void PrintInfo (double velocity , double amplitude , double phase ,
+                double frequency , double periodTime , double pushPeriod ,
+                size_t sizeWinX  , size_t sizeWinY)
 {
     char velStr[16];
     char ampStr[16];
     char phsStr[16];
+    char freStr[16];
+    char pTmStr[16];
+    char pshStr[16];
 
 
     sprintf (velStr , "%.5f" , velocity);
     sprintf (ampStr , "%.5f" , amplitude);
     sprintf (phsStr , "%.5f" , phase / (2 * PI) * 360);
+    sprintf (freStr , "%.5f" , frequency);
+    sprintf (pTmStr , "%.5f" , periodTime);
+    sprintf (pshStr , "%.5f" , pushPeriod);
 
     txSetColor     (TX_BLACK);
     txSetFillColor (TX_BLACK);
-    txRectangle    (sizeWinX - 130 , 0 , sizeWinX , 60);
+    txRectangle    (sizeWinX - 130 , 0 , sizeWinX , 120);
 
     txSetColor (TX_WHITE);
-    txTextOut  (sizeWinX - 100 , 10 , velStr);
-    txTextOut  (sizeWinX - 100 , 30 , ampStr);
-    txTextOut  (sizeWinX - 100 , 50 , phsStr);
+    txTextOut  (sizeWinX - 100 , 5    , velStr);
+    txTextOut  (sizeWinX - 100 , 25   , ampStr);
+    txTextOut  (sizeWinX - 100 , 45   , phsStr);
+    txTextOut  (sizeWinX - 100 , 65   , freStr);
+    txTextOut  (sizeWinX - 100 , 85   , pTmStr);
+    txTextOut  (sizeWinX - 100 , 105  , pshStr);
+}
+
+//------------------------------------------------------------
+
+void DrawMainInfo   (int sizeWinX , int sizeWinY ,  COLORREF background , COLORREF symbol)
+{
+    txTextOut (sizeWinX - 210 , 5   , "Velocity");
+    txTextOut (sizeWinX - 210 , 25  , "Amplitude");
+    txTextOut (sizeWinX - 210 , 45  , "Phase");
+    txTextOut (sizeWinX - 210 , 65  , "Frequency");
+    txTextOut (sizeWinX - 210 , 85  , "Own  period");
+    txTextOut (sizeWinX - 210 , 105 , "Push period");
+
+    //Рисуем значки "+" & "-"
+
+    DrawMinus (sizeWinX - 225 , 50   , background , symbol);
+    DrawMinus (sizeWinX - 225 , 90   , background , symbol);
+    DrawMinus (sizeWinX - 225 , 110  , background , symbol);
+
+    DrawPlus  (sizeWinX - 245 , 50   , background , symbol);
+    DrawPlus  (sizeWinX - 245 , 90   , background , symbol);
+    DrawPlus  (sizeWinX - 245 , 110  , background , symbol);
+}
+
+//-----------------------------------------------------------
+
+void DrawPlus (int cordX , int cordY , COLORREF background , COLORREF symbol)
+{
+    txSetColour     (background);
+    txSetFillColour (background);
+    txRectangle     (cordX - 4 , cordY - 4 , cordX + 4 , cordY + 4);
+
+    txSetColour     (symbol);
+    txSetFillColour (symbol);
+    txRectangle     (cordX - 3 , cordY - 1 , cordX + 3 , cordY + 1);
+    txRectangle     (cordX - 1 , cordY - 3 , cordX + 1 , cordY + 3);
+}
+
+//------------------------------------------------------------
+
+void DrawMinus (int cordX , int cordY , COLORREF background , COLORREF symbol)
+{
+    txSetColour     (background);
+    txSetFillColour (background);
+    txRectangle     (cordX - 4 , cordY - 4 , cordX + 4 , cordY + 4);
+
+    txSetColour     (symbol);
+    txSetFillColour (symbol);
+    txRectangle     (cordX - 3 , cordY - 1 , cordX + 3 , cordY + 1);
 }
 
 //------------------------------------------------------------
@@ -457,3 +563,40 @@ void ScanInfo (int* periodTime , double* pushPeriod , double* pushVelocity ,
         scanf  ("%d" , &i);
     }
 }
+
+//------------------------------------------------------------
+
+
+void ChangingParam (size_t sizeWinX  , size_t  sizeWinY   , double* phase ,
+                    double* pushPeriod , int* periodTime)
+{
+    static RECT phsPlus  = {sizeWinX - 250 , 45  , sizeWinX - 240 , 55};
+    static RECT ownPlus  = {sizeWinX - 250 , 85  , sizeWinX - 240 , 95};
+    static RECT pshPlus  = {sizeWinX - 250 , 105 , sizeWinX - 240 , 115};
+
+
+    static RECT phsMinus = {sizeWinX - 230 , 45  , sizeWinX - 220 , 55};
+    static RECT ownMinus = {sizeWinX - 230 , 85  , sizeWinX - 220 , 95};
+    static RECT pshMinus = {sizeWinX - 230 , 105 , sizeWinX - 220 , 115};
+
+    if (txMouseButtons() == 1 && In (txMousePos(), phsPlus))
+        ++(*phase);
+
+    if (txMouseButtons() == 1 && In (txMousePos(), ownPlus))
+        ++(*periodTime);
+
+    if (txMouseButtons() == 1 && In (txMousePos(), pshPlus))
+        ++(*pushPeriod);
+
+
+
+    if (txMouseButtons() == 1 && In (txMousePos(), phsMinus))
+        --(*phase);
+
+    if (txMouseButtons() == 1 && In (txMousePos(), ownMinus))
+        --(*periodTime);
+
+    if (txMouseButtons() == 1 && In (txMousePos(), pshMinus))
+        --(*pushPeriod);
+}
+
