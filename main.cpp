@@ -29,9 +29,10 @@ void ReBuildScreen  (int sizeWinX , int sizeWinY  , int velLine ,
 
 
 
-void PrintInfo      (double velocity , double amplitude  , double phase ,
-                     double frequency , double periodTime , double pushPeriod ,
-                     size_t sizeWinX  , size_t sizeWinY);
+void PrintInfo      (double  velocity , double amplitude  ,  double phase ,
+                     double  frequency , double periodTime , double pushPeriod ,
+                     size_t  sizeWinX  , size_t sizeWinY   , double pushAmpl ,
+                     double  pushVel   , int    breakdown);
 
 void DrawMainInfo   (int sizeWinX , int sizeWinY , COLORREF background , COLORREF symbol);
 void DrawPlus       (int cordX    , int cordY    , COLORREF background , COLORREF symbol);
@@ -50,8 +51,9 @@ void CalcAmplitude  (int time             , double* amplitude , double* lastAmpl
                      double pushAmplitude , double phase      , double frequency);
 
 
-void ChangingParam (size_t sizeWinX  , size_t  sizeWinY   , double* phase ,
-                    double* pushPeriod , int*    periodTime);
+void ChangingParam (size_t sizeWinX    , size_t  sizeWinY  , double* phase     ,
+                    double* pushPeriod , int*    periodTime , double* pushAmpl  ,
+                    double* pushVel    , int* breakdown     , double  frequency , int* time);
 
 //------------------------------------------------------------
 
@@ -143,17 +145,23 @@ int main ()
         txSleep (0);
 
         //Области изменения Значений
-        while (txMouseButtons() == 1 && In (txMousePos(), areaChanging))
+        if (txMouseButtons() == 1 && In (txMousePos(), areaChanging))
         {
             double lastFre = frequency;
-            txSleep (100);
-            ChangingParam (sizeWinX , sizeWinY , &phase , &pushPeriod , &periodTime);
+            txSleep (60);
+            ChangingParam (sizeWinX     , sizeWinY    , &phase         ,
+                           &pushPeriod   , &periodTime , &pushAmplitude ,
+                           &pushVelocity , &breakdown  , frequency      , &dotAmpl);
 
             frequency     = 2 * PI / periodTime;
 
             DrawCircle (objCentrX + (int)(lastAmplitude * sin ((time - 1) * lastFre - lastPhase)) ,
                         objCentrY , 30 , TX_BLACK , TX_BLACK);
 
+            while (txMouseButtons() == 1)
+            {
+
+            }
         }
 
 
@@ -233,9 +241,10 @@ int main ()
 
 
         //Пишем информацию
-        PrintInfo (curVelocity / frequency , amplitude  , phase ,
-                   frequency               , periodTime , pushPeriod ,
-                   sizeWinX                , sizeWinY);
+        PrintInfo (curVelocity / frequency , amplitude  , phase         ,
+                   frequency               , periodTime , pushPeriod    ,
+                   sizeWinX                , sizeWinY   , pushAmplitude ,
+                   pushVelocity            , breakdown);
 
 
         //Остановка движения
@@ -253,9 +262,45 @@ int main ()
         }
 
 
+        //Сон
+        if (GetAsyncKeyState ('S'))
+        {
+            bool i = 0;
+            do
+            {
+                txSleep (100);
 
-        while (GetAsyncKeyState ('S'))
-            Sleep (50);
+                if (GetAsyncKeyState ('S'))
+                    ++i;
+
+                if (txMouseButtons() == 1 && In (txMousePos(), areaChanging))
+                {
+                    double lastFre = frequency;
+                    ChangingParam (sizeWinX     , sizeWinY    , &phase         ,
+                                   &pushPeriod   , &periodTime , &pushAmplitude ,
+                                   &pushVelocity , &breakdown  , frequency      , &dotAmpl);
+
+                    frequency     = 2 * PI / periodTime;
+
+                    DrawCircle (objCentrX + (int)(lastAmplitude * sin ((time - 1) * lastFre - lastPhase)) ,
+                                objCentrY , 30 , TX_BLACK , TX_BLACK);
+
+
+                    //Пишем информацию
+                    PrintInfo (curVelocity / frequency , amplitude  , phase         ,
+                               frequency               , periodTime , pushPeriod    ,
+                               sizeWinX                , sizeWinY   , pushAmplitude ,
+                               pushVelocity            , breakdown);
+
+
+                    while (txMouseButtons() == 1)
+                    {
+
+                    }
+                }
+
+            } while (i == 0);
+        }
 
 
         //Математика
@@ -400,9 +445,10 @@ void ReBuildScreen (int sizeWinX , int sizeWinY  , int velLine ,
 
 //------------------------------------------------------------
 
-void PrintInfo (double velocity , double amplitude , double phase ,
+void PrintInfo (double velocity , double amplitude  , double phase      ,
                 double frequency , double periodTime , double pushPeriod ,
-                size_t sizeWinX  , size_t sizeWinY)
+                size_t sizeWinX  , size_t sizeWinY   , double pushAmpl   ,
+                double  pushVel  , int  breakdown)
 {
     char velStr[16];
     char ampStr[16];
@@ -410,6 +456,9 @@ void PrintInfo (double velocity , double amplitude , double phase ,
     char freStr[16];
     char pTmStr[16];
     char pshStr[16];
+    char pAmStr[16];
+    char pVeStr[16];
+    char brkStr[16];
 
 
     sprintf (velStr , "%.5f" , velocity);
@@ -418,6 +467,9 @@ void PrintInfo (double velocity , double amplitude , double phase ,
     sprintf (freStr , "%.5f" , frequency);
     sprintf (pTmStr , "%.5f" , periodTime);
     sprintf (pshStr , "%.5f" , pushPeriod);
+    sprintf (pAmStr , "%.5f" , pushAmpl);
+    sprintf (pVeStr , "%.5f" , pushVel);
+    sprintf (brkStr , "%d" , breakdown);
 
     txSetColor     (TX_BLACK);
     txSetFillColor (TX_BLACK);
@@ -430,6 +482,14 @@ void PrintInfo (double velocity , double amplitude , double phase ,
     txTextOut  (sizeWinX - 100 , 65   , freStr);
     txTextOut  (sizeWinX - 100 , 85   , pTmStr);
     txTextOut  (sizeWinX - 100 , 105  , pshStr);
+
+    txSetColor (TX_BLACK);
+    txRectangle   (sizeWinX - 290 , 0 , sizeWinX - 370 , 120);
+
+    txSetColor (TX_WHITE);
+    txTextOut  (sizeWinX - 355 , 5    , pAmStr);
+    txTextOut  (sizeWinX - 355 , 25   , pVeStr);
+    txTextOut  (sizeWinX - 355 , 45   , brkStr);
 }
 
 //------------------------------------------------------------
@@ -443,15 +503,29 @@ void DrawMainInfo   (int sizeWinX , int sizeWinY ,  COLORREF background , COLORR
     txTextOut (sizeWinX - 210 , 85  , "Own  period");
     txTextOut (sizeWinX - 210 , 105 , "Push period");
 
+    txTextOut (sizeWinX - 485 , 5   , "push amplitude");
+    txTextOut (sizeWinX - 485 , 25  , "push velocity");
+    txTextOut (sizeWinX - 485 , 45  , "breakdown");
+
+
     //Рисуем значки "+" & "-"
 
     DrawMinus (sizeWinX - 225 , 50   , background , symbol);
     DrawMinus (sizeWinX - 225 , 90   , background , symbol);
     DrawMinus (sizeWinX - 225 , 110  , background , symbol);
 
+    DrawMinus (sizeWinX - 500 , 10   , background , symbol);
+    DrawMinus (sizeWinX - 500 , 30   , background , symbol);
+    DrawMinus (sizeWinX - 500 , 50   , background , symbol);
+
+
     DrawPlus  (sizeWinX - 245 , 50   , background , symbol);
     DrawPlus  (sizeWinX - 245 , 90   , background , symbol);
     DrawPlus  (sizeWinX - 245 , 110  , background , symbol);
+
+    DrawPlus  (sizeWinX - 520 , 10   , background , symbol);
+    DrawPlus  (sizeWinX - 520 , 30   , background , symbol);
+    DrawPlus  (sizeWinX - 520 , 50   , background , symbol);
 }
 
 //-----------------------------------------------------------
@@ -566,37 +640,87 @@ void ScanInfo (int* periodTime , double* pushPeriod , double* pushVelocity ,
 
 //------------------------------------------------------------
 
-
-void ChangingParam (size_t sizeWinX  , size_t  sizeWinY   , double* phase ,
-                    double* pushPeriod , int* periodTime)
+void ChangingParam (size_t sizeWinX   ,  size_t  sizeWinY , double* phase    ,
+                    double* pushPeriod , int* periodTime   , double* pushAmpl ,
+                    double* pushVel    , int* breakdown    , double  frequency , int* time)
 {
     static RECT phsPlus  = {sizeWinX - 250 , 45  , sizeWinX - 240 , 55};
     static RECT ownPlus  = {sizeWinX - 250 , 85  , sizeWinX - 240 , 95};
     static RECT pshPlus  = {sizeWinX - 250 , 105 , sizeWinX - 240 , 115};
+
+    static RECT pAmPlus  = {sizeWinX - 525 , 5   , sizeWinX - 515 , 15};
+    static RECT pVePlus  = {sizeWinX - 525 , 25  , sizeWinX - 515 , 35};
+    static RECT brkPlus  = {sizeWinX - 525 , 45  , sizeWinX - 515 , 55};
+
 
 
     static RECT phsMinus = {sizeWinX - 230 , 45  , sizeWinX - 220 , 55};
     static RECT ownMinus = {sizeWinX - 230 , 85  , sizeWinX - 220 , 95};
     static RECT pshMinus = {sizeWinX - 230 , 105 , sizeWinX - 220 , 115};
 
-    if (txMouseButtons() == 1 && In (txMousePos(), phsPlus))
-        ++(*phase);
+    static RECT pAmMinus = {sizeWinX - 505 , 5   , sizeWinX - 495 , 15};
+    static RECT pVeMinus = {sizeWinX - 505 , 25  , sizeWinX - 495 , 35};
+    static RECT brkMinus = {sizeWinX - 505 , 45  , sizeWinX - 495 , 55};
 
-    if (txMouseButtons() == 1 && In (txMousePos(), ownPlus))
+
+
+    if (txMouseButtons() == 1 && In (txMousePos() , phsPlus))
+        *phase += 2 * PI / 360;
+
+    if (txMouseButtons() == 1 && In (txMousePos() , ownPlus))
         ++(*periodTime);
 
-    if (txMouseButtons() == 1 && In (txMousePos(), pshPlus))
+    if (txMouseButtons() == 1 && In (txMousePos() , pshPlus))
         ++(*pushPeriod);
 
+    if (txMouseButtons() == 1 && In (txMousePos() , pAmPlus) && *pushAmpl  < 2.5)
+    {
+        *pushAmpl += 0.05;
+        *pushVel   = *pushAmpl * frequency;
+    }
+
+    if (txMouseButtons() == 1 && In (txMousePos() , pVePlus) && *pushVel   < 2.5)
+    {
+        *pushVel  += 0.05;
+        *pushAmpl  = *pushVel / frequency;
+    }
+
+    if (txMouseButtons() == 1 && In (txMousePos() , brkPlus) && *breakdown < 10)
+    {
+        ++(*breakdown);
+
+        *time *= (*time) * *breakdown / (*breakdown - 1);
+    }
 
 
-    if (txMouseButtons() == 1 && In (txMousePos(), phsMinus))
-        --(*phase);
 
-    if (txMouseButtons() == 1 && In (txMousePos(), ownMinus))
+
+    if (txMouseButtons() == 1 && In (txMousePos() , phsMinus))
+        *phase -= 2 * PI / 360;
+
+    if (txMouseButtons() == 1 && In (txMousePos() , ownMinus))
         --(*periodTime);
 
-    if (txMouseButtons() == 1 && In (txMousePos(), pshMinus))
+    if (txMouseButtons() == 1 && In (txMousePos() , pshMinus))
         --(*pushPeriod);
+
+    if (txMouseButtons() == 1 && In (txMousePos() , pAmMinus) && *pushAmpl  > -2.5)
+    {
+        *pushAmpl -= 0.05;
+        *pushVel   = *pushAmpl * frequency;
+    }
+
+    if (txMouseButtons() == 1 && In (txMousePos() , pVeMinus) && *pushVel   > -2.5)
+    {
+        *pushVel  -= 0.05;
+        *pushAmpl  = *pushVel / frequency;
+    }
+
+    if (txMouseButtons() == 1 && In (txMousePos() , brkMinus) && *breakdown > 1)
+    {
+        --(*breakdown);
+
+        *time = (*time) * *breakdown / (*breakdown + 1);
+    }
 }
 
