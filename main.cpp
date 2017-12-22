@@ -1,7 +1,7 @@
 #include "TXLib.h"
 #include "DirectTX.cpp"
 
-
+#include <time.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -99,7 +99,7 @@ int main ()
 
 
     //Создаем окно для рисования
-    DirectTXCreateWindow(sizeWinX , sizeWinY , "FreeQuestion... [Esc] to exit");
+    DirectTXCreateWindow(sizeWinX , sizeWinY , "The model of periodic tremors on a harmonic oscillator... [Esc] to exit");
 
 
     if (periodTime != 0 || pushAmplitude != 0 || frequency != 0)
@@ -136,11 +136,90 @@ int main ()
     txBegin();
 
     int curPeriod = 0;
-    int time = 0;
+    int mTim = 0;
 
-    //Рисование
-    for (; !GetAsyncKeyState (VK_ESCAPE); ++time)
+    bool random = 0;
+
+//Рисование ==================================================
+
+    for (; !GetAsyncKeyState (VK_ESCAPE); ++mTim)
     {
+
+        if (GetAsyncKeyState ('R'))
+        {
+            srand (time(NULL));
+
+            random = random > 0 ? 0 : 1;
+            Sleep(100);
+
+            if (random)
+            {
+                txFillColor     (128 , 0 , 0);
+                txRectangle     (sizeWinX / 2 + 1 , 0 , sizeWinX / 2 + 50 , 50);
+
+                txSetColour     (TX_WHITE);
+                txTextOut       (sizeWinX / 2 + 4 , 20 , "RANDOM");
+            }
+            else
+            {
+                txSetFillColour (TX_BLACK);
+                txRectangle     (sizeWinX / 2 + 1 , 0 , sizeWinX / 2 + 50 , 50);
+
+                txSetColour     (TX_WHITE);
+                txTextOut       (sizeWinX / 2 + 4 , 20 , "RANDOM");
+            }
+        }
+
+        if (random)
+        {
+            srand(time(NULL));
+
+            pushPeriod = rand() % 150 +1;
+            pushAmplitude = rand() % 2 ? (rand() % 300) / 100.0 : -((rand() % 300) / 100.0);
+            pushVelocity = pushAmplitude * frequency;
+        }
+
+
+        //Сон
+        if (GetAsyncKeyState ('S'))
+        {
+            bool i = 0;
+            do
+            {
+                txSleep (100);
+
+                if (GetAsyncKeyState ('S'))
+                    ++i;
+
+                if (txMouseButtons() == 1 && In (txMousePos(), areaChanging))
+                {
+                    double lastFre = frequency;
+                    ChangingParam (sizeWinX     , sizeWinY    , &phase         ,
+                                   &pushPeriod   , &periodTime , &pushAmplitude ,
+                                   &pushVelocity , &breakdown  , frequency      , &dotAmpl);
+
+                    frequency     = 2 * PI / periodTime;
+
+                    DrawCircle (objCentrX + (int)(lastAmplitude * sin ((mTim - 1) * lastFre - lastPhase)) ,
+                                objCentrY , 30 , TX_BLACK , TX_BLACK);
+
+
+                    //Пишем информацию
+                    PrintInfo (curVelocity / frequency , amplitude  , phase         ,
+                               frequency               , periodTime , pushPeriod    ,
+                               sizeWinX                , sizeWinY   , pushAmplitude ,
+                               pushVelocity            , breakdown);
+
+
+                    while (txMouseButtons() == 1)
+                    {
+
+                    }
+                }
+
+            } while (i == 0);
+        }
+
 
         txSleep (0);
 
@@ -155,7 +234,7 @@ int main ()
 
             frequency     = 2 * PI / periodTime;
 
-            DrawCircle (objCentrX + (int)(lastAmplitude * sin ((time - 1) * lastFre - lastPhase)) ,
+            DrawCircle (objCentrX + (int)(lastAmplitude * sin ((mTim - 1) * lastFre - lastPhase)) ,
                         objCentrY , 30 , TX_BLACK , TX_BLACK);
 
             while (txMouseButtons() == 1)
@@ -165,8 +244,8 @@ int main ()
         }
 
 
-        if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
-            DrawCircle (objCentrX + (int)(amplitude * sin ((time - 1) * frequency - phase)) ,
+        if (abs(amplitude * sin (mTim * frequency - phase)) < (sizeWinX - 30) / 4.0)
+            DrawCircle (objCentrX + (int)(amplitude * sin ((mTim - 1) * frequency - phase)) ,
                         objCentrY , 30 , TX_BLACK , TX_BLACK);
 
 
@@ -175,8 +254,8 @@ int main ()
         txLine (objCentrX , 0 , objCentrX , 140);
 
 
-        if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
-            DrawCircle (objCentrX + (int)(amplitude * sin (time * frequency - phase)) ,
+        if (abs(amplitude * sin (mTim * frequency - phase)) < (sizeWinX - 30) / 4.0)
+            DrawCircle (objCentrX + (int)(amplitude * sin (mTim * frequency - phase)) ,
                         objCentrY , 30 , TX_CYAN , TX_BLACK);
 
 
@@ -185,25 +264,25 @@ int main ()
         if (dotAmpl < sizeWinX * breakdown)
         {
             //(1)
-            if (abs (amplitude * sin (time               * frequency - phase)) <  100 &&
-                abs (amplitude * sin ((time - breakdown) * frequency - phase)) <  100 &&
+            if (abs (amplitude * sin (mTim               * frequency - phase)) <  100 &&
+                abs (amplitude * sin ((mTim - breakdown) * frequency - phase)) <  100 &&
                 dotAmpl % breakdown == 0)
             {
-                DrawSinusoidal (dotAmpl / breakdown , time            , phase     , frequency ,
+                DrawSinusoidal (dotAmpl / breakdown , mTim            , phase     , frequency ,
                                 amplitude           , sizeWinY - 100  , breakdown , SIN);
             }
 
             //(2)
-            if (abs (curVelocity * cos ( time              * frequency - phase)) <  100 &&
-                abs (curVelocity * cos ((time - breakdown) * frequency - phase)) <  100 &&
+            if (abs (curVelocity * cos ( mTim              * frequency - phase)) <  100 &&
+                abs (curVelocity * cos ((mTim - breakdown) * frequency - phase)) <  100 &&
                 dotAmpl % breakdown == 0)
             {
-                DrawSinusoidal (dotAmpl / breakdown , time     , phase     , frequency ,
+                DrawSinusoidal (dotAmpl / breakdown , mTim     , phase     , frequency ,
                                 curVelocity         , velLine  , breakdown , COS);
             }
 
             //(3) вправо
-            if ((GetAsyncKeyState (VK_RIGHT) || time % (int)pushPeriod == 0) &&
+            if ((GetAsyncKeyState (VK_RIGHT) || mTim % (int)pushPeriod == 0) &&
                 !GetAsyncKeyState (VK_LEFT ))
             {
                 if (pushVelocity * 40 < 50)
@@ -250,8 +329,8 @@ int main ()
         //Остановка движения
         if (GetAsyncKeyState (VK_SPACE))
         {
-            if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
-                DrawCircle (objCentrX + (int)(amplitude * sin (time * frequency - phase)) ,
+            if (abs(amplitude * sin (mTim * frequency - phase)) < (sizeWinX - 30) / 4.0)
+                DrawCircle (objCentrX + (int)(amplitude * sin (mTim * frequency - phase)) ,
                             objCentrY , 30 , TX_BLACK , TX_BLACK);
 
             curVelocity = 0;
@@ -262,66 +341,25 @@ int main ()
         }
 
 
-        //Сон
-        if (GetAsyncKeyState ('S'))
-        {
-            bool i = 0;
-            do
-            {
-                txSleep (100);
-
-                if (GetAsyncKeyState ('S'))
-                    ++i;
-
-                if (txMouseButtons() == 1 && In (txMousePos(), areaChanging))
-                {
-                    double lastFre = frequency;
-                    ChangingParam (sizeWinX     , sizeWinY    , &phase         ,
-                                   &pushPeriod   , &periodTime , &pushAmplitude ,
-                                   &pushVelocity , &breakdown  , frequency      , &dotAmpl);
-
-                    frequency     = 2 * PI / periodTime;
-
-                    DrawCircle (objCentrX + (int)(lastAmplitude * sin ((time - 1) * lastFre - lastPhase)) ,
-                                objCentrY , 30 , TX_BLACK , TX_BLACK);
-
-
-                    //Пишем информацию
-                    PrintInfo (curVelocity / frequency , amplitude  , phase         ,
-                               frequency               , periodTime , pushPeriod    ,
-                               sizeWinX                , sizeWinY   , pushAmplitude ,
-                               pushVelocity            , breakdown);
-
-
-                    while (txMouseButtons() == 1)
-                    {
-
-                    }
-                }
-
-            } while (i == 0);
-        }
-
 
         //Математика
 
-        if (time == (10000 * periodTime))
-            time = 0;
+        if (mTim == (10000 * periodTime))
+            mTim = 0;
 
 
         //Математика: удар вправо
-        if ((time % (int)pushPeriod == 0 || GetAsyncKeyState (VK_RIGHT)) &&
+        if ((mTim % (int)pushPeriod == 0 || GetAsyncKeyState (VK_RIGHT)) &&
             !GetAsyncKeyState (VK_LEFT)   && pushAmplitude != 0)
         {
             curPeriod++;
 
-            CalcPhase (time      , amplitude , pushAmplitude ,
+            CalcPhase (mTim      , amplitude , pushAmplitude ,
                        &lastPhase , &phase    , frequency);
 
-            CalcAmplitude (time , &amplitude , &lastAmplitude , pushAmplitude , lastPhase , frequency);
+            CalcAmplitude (mTim , &amplitude , &lastAmplitude , pushAmplitude , lastPhase , frequency);
 
             curVelocity  = amplitude;
-
         }
 
 
@@ -330,10 +368,10 @@ int main ()
         {
             curPeriod++;
 
-            CalcPhase (time      , amplitude , pushAmplUp ,
+            CalcPhase (mTim      , amplitude , pushAmplUp ,
                        &lastPhase , &phase    , frequency);
 
-            CalcAmplitude (time       , &amplitude , &lastAmplitude ,
+            CalcAmplitude (mTim       , &amplitude , &lastAmplitude ,
                            pushAmplUp , lastPhase  , frequency);
 
             curVelocity  = amplitude;
@@ -342,11 +380,11 @@ int main ()
     }
 
 
-    if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
-        DrawCircle (objCentrX + (int)(amplitude * sin ((time - 1) * frequency - phase)) ,
+    if (abs(amplitude * sin (mTim * frequency - phase)) < (sizeWinX - 30) / 4.0)
+        DrawCircle (objCentrX + (int)(amplitude * sin ((mTim - 1) * frequency - phase)) ,
                     objCentrY , 30 , TX_BLACK , TX_BLACK);
-    if (abs(amplitude * sin (time * frequency - phase)) < (sizeWinX - 30) / 4.0)
-        DrawCircle (objCentrX + (int)(amplitude * sin (time       * frequency - phase)) ,
+    if (abs(amplitude * sin (mTim * frequency - phase)) < (sizeWinX - 30) / 4.0)
+        DrawCircle (objCentrX + (int)(amplitude * sin (mTim       * frequency - phase)) ,
                     objCentrY , 30 , TX_CYAN , TX_BLACK);
 
 
